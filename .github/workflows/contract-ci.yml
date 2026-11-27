@@ -1,0 +1,93 @@
+name: Worker Registry contract checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: registry-contract-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-contract:
+    name: Validate registry contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate OpenAPI structure and security boundary
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          spec = json.loads(Path("contracts/worker-registry.openapi.json").read_text(encoding="utf-8"))
+          assert spec["openapi"] == "3.1.0"
+          assert spec["components"]["securitySchemes"]["WorkerIdentity"]["scheme"] == "bearer"
+          operations = []
+          for path, path_item in spec["paths"].items():
+              for method, operation in path_item.items():
+                  if method.lower() not in {"get", "post", "put", "patch", "delete"}:
+                      continue
+                  operations.append(operation["operationId"])
+                  if path not in {"/healthz", "/readyz"}:
+                      assert operation.get("x-required-roles"), f"Missing authorization role: {method.upper()} {path}"
+                      assert operation.get("security"), f"Missing bearer security: {method.upper()} {path}"
+          assert len(operations) == len(set(operations)), "operationId values must be unique"
+          assert "/v1/workers/{worker_id}/heartbeat" in spec["paths"]
+          assert "/v1/workers/{worker_id}/approve" in spec["paths"]
+          assert "/v1/workers/{worker_id}/revoke" in spec["paths"]
+          worker = spec["components"]["schemas"]["Worker"]
+          assert "capabilities" in worker["properties"]
+          assert "requested_capabilities" in worker["properties"]
+          assert "pending" in worker["properties"]["state"]["enum"]
+          assert "revoked" in worker["properties"]["state"]["enum"]
+          print(f"Validated {len(spec['paths'])} paths and {len(operations)} operations")
+          PY
+      - name: Write contract-check receipt
+        env:
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
+          GH_REF: ${{ github.ref }}
+          GH_RUN_ID: ${{ github.run_id }}
+          GH_RUN_ATTEMPT: ${{ github.run_attempt }}
+          RUNNER_NAME: ${{ runner.name }}
+          RUNNER_OS: ${{ runner.os }}
+        shell: bash
+        run: |
+          mkdir -p out
+          python3 - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          receipt = {
+              "repository": os.environ["GH_REPOSITORY"],
+              "sha": os.environ["GH_SHA"],
+              "ref": os.environ["GH_REF"],
+              "run_id": os.environ["GH_RUN_ID"],
+              "run_attempt": os.environ["GH_RUN_ATTEMPT"],
+              "runner": os.environ["RUNNER_NAME"],
+              "runner_os": os.environ["RUNNER_OS"],
+              "created_at": datetime.now(timezone.utc).isoformat(),
+              "status": "contract_checks_passed",
+              "scope": "OpenAPI structure and documented security invariants only; no registry service, database, cloud identity, or persistent worker was exercised"
+          }
+          with open("out/registry-contract-receipt.json", "w", encoding="utf-8") as f:
+              json.dump(receipt, f, indent=2)
+          PY
+      - name: Upload contract-check receipt
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: worker-registry-contract-receipt
+          path: out/registry-contract-receipt.json
+          if-no-files-found: error
+          retention-days: 14
