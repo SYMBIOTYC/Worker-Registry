@@ -1,6 +1,6 @@
 # Symbiotyc Worker Registry
 
-Worker Registry is the control-plane record of compute workers. It tracks identity, approved capabilities, health leases, capacity, and lifecycle state. The scheduler must treat registry data as authoritative and must never dispatch work to an unapproved or stale worker.
+Worker Registry is the control-plane record of compute workers. It tracks authenticated identity, server-approved capabilities, health leases, capacity, and lifecycle state. A scheduler must never dispatch work to an unapproved, revoked, draining, or stale worker.
 
 ## Worker classes
 
@@ -10,9 +10,9 @@ Worker Registry is the control-plane record of compute workers. It tracks identi
 
 Worker class, capabilities, concurrency, and trust are separate fields. A worker cannot select its own trust level.
 
-## Contract and status
+## Repository status
 
-The initial registry API contract and acceptance criteria are being added on a review branch. This repository does not yet contain a deployed registry service, database, scheduler, cloud identity provider, or persistent worker.
+This branch defines the initial API contract and runtime acceptance criteria. This repository does not yet contain a deployed registry service, database, scheduler, cloud identity provider, or persistent worker.
 
 Production registration must use authenticated, short-lived identities. New workers start pending and remain ineligible for scheduling until explicitly approved. Heartbeats create server-side leases; missed leases make a worker unhealthy and ineligible.
 
@@ -23,5 +23,14 @@ Production registration must use authenticated, short-lived identities. New work
 - Keep Linux CI, CPU, and VPS worker pools isolated.
 - Keep job payloads and artifact contents out of registry records; store only bounded metadata and artifact references.
 - Record approval, drain, revocation, and dispatch decisions in an auditable event stream.
+- Treat the current GitHub-hosted contract check as a contract check only; it does not prove a production worker or cloud integration.
 
-See the review branch for the API contract, Ubuntu worker baseline, OIDC/WIF requirements, artifact handoff rules, and runtime acceptance gates.
+## Contract and operations
+
+- [OpenAPI contract](contracts/worker-registry.openapi.json)
+- [Architecture boundaries](docs/architecture.md)
+- [Lifecycle, approval, and heartbeat leases](docs/worker-lifecycle.md)
+- [Identity and Google Cloud WIF requirements](docs/identity-and-wif.md)
+- [Ubuntu 24.04 and Debian 12 worker baseline](docs/ubuntu-worker-baseline.md)
+- [Artifact transfer and receipts](docs/artifact-transfer.md)
+- [Runtime acceptance criteria](docs/acceptance-criteria.md)

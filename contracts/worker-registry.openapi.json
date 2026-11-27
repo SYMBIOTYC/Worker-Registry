@@ -1,0 +1,888 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Symbiotyc Worker Registry API",
+    "version": "0.1.0",
+    "description": "Draft control-plane contract for worker enrollment, approval, health leases, and lifecycle. It does not implement job dispatch."
+  },
+  "servers": [
+    {
+      "url": "https://registry.example.invalid",
+      "description": "Placeholder; replace only after a service endpoint is provisioned."
+    }
+  ],
+  "security": [
+    {
+      "WorkerIdentity": []
+    }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "liveness",
+        "security": [],
+        "summary": "Process liveness only",
+        "responses": {
+          "200": {
+            "description": "Process is alive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "readiness",
+        "security": [],
+        "summary": "Dependency readiness without diagnostic details",
+        "responses": {
+          "200": {
+            "description": "Ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not ready"
+          }
+        }
+      }
+    },
+    "/v1/workers": {
+      "get": {
+        "operationId": "listWorkers",
+        "summary": "List workers visible to the caller",
+        "x-required-roles": [
+          "workers:read"
+        ],
+        "parameters": [
+          {
+            "name": "class",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cpu",
+                "vps"
+              ]
+            }
+          },
+          {
+            "name": "pool",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "online",
+                "draining",
+                "unhealthy",
+                "revoked"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page of workers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "security": [
+          {
+            "WorkerIdentity": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "registerWorker",
+        "summary": "Request worker registration",
+        "x-required-roles": [
+          "worker:register"
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkerRegistration"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Pending registration; not schedulable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Worker"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "security": [
+          {
+            "WorkerIdentity": []
+          }
+        ]
+      }
+    },
+    "/v1/workers/{worker_id}": {
+      "get": {
+        "operationId": "getWorker",
+        "summary": "Get one worker record",
+        "x-required-roles": [
+          "workers:read"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WorkerId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Worker record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Worker"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "security": [
+          {
+            "WorkerIdentity": []
+          }
+        ]
+      }
+    },
+    "/v1/workers/{worker_id}/heartbeat": {
+      "post": {
+        "operationId": "heartbeatWorker",
+        "summary": "Renew health lease and report available capacity",
+        "x-required-roles": [
+          "worker:heartbeat"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WorkerId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HeartbeatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lease result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartbeatResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "security": [
+          {
+            "WorkerIdentity": []
+          }
+        ]
+      }
+    },
+    "/v1/workers/{worker_id}/approve": {
+      "post": {
+        "operationId": "approveWorker",
+        "summary": "Approve a pending worker and set bounded scheduler capabilities",
+        "x-required-roles": [
+          "workers:admin"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WorkerId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Approval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Approved worker",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Worker"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        },
+        "security": [
+          {
+            "WorkerIdentity": []
+          }
+        ]
+      }
+    },
+    "/v1/workers/{worker_id}/drain": {
+      "post": {
+        "operationId": "drainWorker",
+        "summary": "Stop new scheduling while allowing active work to finish",
+        "x-required-roles": [
+          "workers:admin"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WorkerId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Drain requested",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Worker"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        },
+        "security": [
+          {
+            "WorkerIdentity": []
+          }
+        ]
+      }
+    },
+    "/v1/workers/{worker_id}/revoke": {
+      "post": {
+        "operationId": "revokeWorker",
+        "summary": "Immediately revoke a worker identity and stop scheduling",
+        "x-required-roles": [
+          "workers:admin"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WorkerId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reason"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Revocation accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Worker"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        },
+        "security": [
+          {
+            "WorkerIdentity": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "WorkerIdentity": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Short-lived identity token. Validate signature, issuer, audience, expiry, and role claims. Static worker secrets and service-account keys are forbidden."
+      }
+    },
+    "parameters": {
+      "WorkerId": {
+        "name": "worker_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Malformed request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing or invalid identity",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Identity is not authorized for this operation",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Worker not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Invalid lifecycle transition or idempotency conflict",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "Request failed validation",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          }
+        }
+      },
+      "WorkerRegistration": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "class",
+          "pool",
+          "agent_version",
+          "os",
+          "architecture",
+          "requested_capabilities",
+          "requested_max_concurrency"
+        ],
+        "properties": {
+          "class": {
+            "type": "string",
+            "enum": [
+              "cpu",
+              "vps"
+            ],
+            "description": "Linux CI is deliberately excluded; hosted Actions jobs are ephemeral."
+          },
+          "pool": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "agent_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "os": {
+            "type": "string",
+            "enum": [
+              "ubuntu-24.04",
+              "debian-12"
+            ]
+          },
+          "architecture": {
+            "type": "string",
+            "enum": [
+              "x86_64",
+              "arm64"
+            ]
+          },
+          "requested_capabilities": {
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+            }
+          },
+          "requested_max_concurrency": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 128
+          },
+          "labels": {
+            "type": "object",
+            "maxProperties": 32,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 128
+            }
+          }
+        }
+      },
+      "Approval": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "capabilities",
+          "max_concurrency"
+        ],
+        "properties": {
+          "capabilities": {
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+            }
+          },
+          "max_concurrency": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 128
+          }
+        }
+      },
+      "HeartbeatRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "agent_version",
+          "available_slots"
+        ],
+        "properties": {
+          "agent_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "available_slots": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 128
+          }
+        }
+      },
+      "HeartbeatResponse": {
+        "type": "object",
+        "required": [
+          "worker_id",
+          "state",
+          "schedulable",
+          "server_time",
+          "heartbeat_interval_seconds"
+        ],
+        "properties": {
+          "worker_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "online",
+              "draining",
+              "unhealthy",
+              "revoked"
+            ]
+          },
+          "schedulable": {
+            "type": "boolean"
+          },
+          "lease_expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "heartbeat_interval_seconds": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 300
+          },
+          "server_time": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Worker": {
+        "type": "object",
+        "required": [
+          "worker_id",
+          "class",
+          "pool",
+          "state",
+          "requested_capabilities",
+          "capabilities",
+          "max_concurrency",
+          "available_slots",
+          "os",
+          "architecture",
+          "agent_version",
+          "created_at",
+          "last_seen_at"
+        ],
+        "properties": {
+          "worker_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "class": {
+            "type": "string",
+            "enum": [
+              "cpu",
+              "vps"
+            ]
+          },
+          "pool": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "online",
+              "draining",
+              "unhealthy",
+              "revoked"
+            ]
+          },
+          "requested_capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Server-approved capabilities only; never trust self-reported values for scheduling."
+          },
+          "max_concurrency": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 128
+          },
+          "available_slots": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 128
+          },
+          "os": {
+            "type": "string"
+          },
+          "architecture": {
+            "type": "string"
+          },
+          "agent_version": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "approved_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_seen_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lease_expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "WorkerPage": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Worker"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Reason": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 256
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "request_id"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
