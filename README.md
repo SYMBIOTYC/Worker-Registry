@@ -12,7 +12,7 @@ Worker class, capabilities, concurrency, and trust are separate fields. A worker
 
 ## Repository status
 
-This branch defines the initial API contract and runtime acceptance criteria. This repository does not yet contain a deployed registry service, database, scheduler, cloud identity provider, or persistent worker.
+This repository defines the API contract and runtime acceptance criteria. The `feat/worker-registry-lifecycle-core` branch adds a dependency-free, in-memory lifecycle domain core with seven Node.js unit tests. It is not a deployed registry service and does not yet provide HTTP handlers, persistence, a database, scheduler integration, cloud identity provider, or persistent worker. The branch's two GitHub Actions checks validate the contract and execute the lifecycle unit tests.
 
 Production registration must use authenticated, short-lived identities. New workers start pending and remain ineligible for scheduling until explicitly approved. Heartbeats create server-side leases; missed leases make a worker unhealthy and ineligible.
 
