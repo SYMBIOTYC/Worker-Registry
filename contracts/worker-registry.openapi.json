@@ -133,7 +133,12 @@
           "403": {
             "$ref": "#/components/responses/Forbidden"
           }
-        }
+        },
+        "security": [
+          {
+            "WorkerIdentity": []
+          }
+        ]
       },
       "post": {
         "operationId": "registerWorker",
@@ -189,7 +194,12 @@
           "422": {
             "$ref": "#/components/responses/ValidationError"
           }
-        }
+        },
+        "security": [
+          {
+            "WorkerIdentity": []
+          }
+        ]
       }
     },
     "/v1/workers/{worker_id}": {
@@ -224,7 +234,12 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           }
-        }
+        },
+        "security": [
+          {
+            "WorkerIdentity": []
+          }
+        ]
       }
     },
     "/v1/workers/{worker_id}/heartbeat": {
@@ -275,7 +290,12 @@
           "422": {
             "$ref": "#/components/responses/ValidationError"
           }
-        }
+        },
+        "security": [
+          {
+            "WorkerIdentity": []
+          }
+        ]
       }
     },
     "/v1/workers/{worker_id}/approve": {
@@ -326,7 +346,12 @@
           "422": {
             "$ref": "#/components/responses/ValidationError"
           }
-        }
+        },
+        "security": [
+          {
+            "WorkerIdentity": []
+          }
+        ]
       }
     },
     "/v1/workers/{worker_id}/drain": {
@@ -374,7 +399,12 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           }
-        }
+        },
+        "security": [
+          {
+            "WorkerIdentity": []
+          }
+        ]
       }
     },
     "/v1/workers/{worker_id}/revoke": {
@@ -422,7 +452,12 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           }
-        }
+        },
+        "security": [
+          {
+            "WorkerIdentity": []
+          }
+        ]
       }
     }
   },
