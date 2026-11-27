@@ -79,7 +79,7 @@ export function approveWorker(worker, approval, now = Date.now()) {
   if (!Array.isArray(approval.capabilities) ||
       approval.capabilities.some((capability) => !worker.requestedCapabilities.includes(capability)) ||
       new Set(approval.capabilities).size !== approval.capabilities.length) {
-    throw new Error("approved capabilities must be a unique subset of capabilities requested");
+    throw new Error("approved capabilities contain a capability not requested or a duplicate");
   }
   if (!Number.isInteger(approval.maxConcurrency) || approval.maxConcurrency < 1 ||
       approval.maxConcurrency > worker.requestedMaxConcurrency) {
