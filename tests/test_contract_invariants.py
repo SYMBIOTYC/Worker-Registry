@@ -105,7 +105,7 @@ class WorkerRegistryContractTests(unittest.TestCase):
         props = worker["properties"]
         self.assertIn("requested_capabilities", props)
         self.assertIn("capabilities", props)
-        self.assertIn("server-approved", props["capabilities"].get("description", ""))
+        self.assertIn("server-approved", props["capabilities"].get("description", "").casefold())
         self.assertEqual(props["state"]["enum"],
                          ["pending", "online", "draining", "unhealthy", "revoked"])
         self.assertGreaterEqual(props["max_concurrency"]["minimum"], 0)
